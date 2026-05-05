@@ -108,6 +108,8 @@ def processCommand(c):
         webbrowser.open("https://leetcode.com")
     elif "open x" in c.lower():
         webbrowser.open("https://x.com")
+    elif "open twitter" in c.lower():
+        webbrowser.open("https://x.com")
     elif "open spotify" in c.lower():
         webbrowser.open("https://open.spotify.com")
     elif "open chatgpt" in c.lower():
