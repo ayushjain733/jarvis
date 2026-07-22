@@ -1,6 +1,7 @@
 import sqlite3
 from langgraph.checkpoint.sqlite import SqliteSaver
-from langgraph.prebuilt import create_react_agent
+# from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_agent
 from langchain_google_genai import ChatGoogleGenerativeAI
 from tools import jarvis_tools
 from dotenv import load_dotenv
@@ -19,10 +20,17 @@ You can remember past conversations, access the user's system to open applicatio
 Always be concise, professional, and helpful. 
 """
 
-jarvis_agent = create_react_agent(
+# jarvis_agent = create_react_agent(
+#     model=llm,
+#     tools=jarvis_tools,
+#     prompt=system_instruction,
+#     # state_modifier=system_instruction,
+#     checkpointer=memory
+# )
+
+jarvis_agent = create_agent(
     model=llm,
     tools=jarvis_tools,
-    prompt=system_instruction,
-    # state_modifier=system_instruction,
+    system_prompt=system_instruction, # 'prompt' is now 'system_prompt'
     checkpointer=memory
 )
