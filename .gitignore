@@ -1,5 +1,7 @@
 # my additions
 myvenv
+myvenv313
+checkpoints*
 image_and_video
 
 # Byte-compiled / optimized / DLL files
