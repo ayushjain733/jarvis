@@ -1,4 +1,5 @@
 import os
+import glob
 import subprocess
 import urllib.request
 import urllib.parse
@@ -12,8 +13,121 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
 
 @tool
+def open_system_path_or_folder(target: str) -> str:
+    """
+    Opens any folder, directory, or file on the Windows system.
+    Handles absolute paths or searches standard user directories (Downloads, Desktop, Documents, C:\\).
+    Example targets: 'C:\\Users\\Ayush\\Downloads\\angiogram', 'angiogram', 'Downloads', 'Documents'.
+    """
+    try:
+        # 1. Direct path check
+        if os.path.exists(target):
+            os.startfile(target)
+            return f"Successfully opened path: {target}"
+        
+        # 2. Check standard Windows user directories
+        user_profile = os.environ.get("USERPROFILE", "C:\\Users\\Default")
+        common_dirs = [
+            os.path.join(user_profile, "Downloads"),
+            os.path.join(user_profile, "Desktop"),
+            os.path.join(user_profile, "Documents"),
+            "C:\\"
+        ]
+        
+        target_clean = target.lower().strip()
+
+        # Check if user meant a main folder directly (e.g. "downloads")
+        for cdir in common_dirs:
+            if os.path.basename(cdir).lower() == target_clean:
+                os.startfile(cdir)
+                return f"Opened {cdir} directory."
+
+        # Search inside common directories for matching subfolders/files
+        for base_dir in common_dirs:
+            if not os.path.exists(base_dir):
+                continue
+            for item in os.listdir(base_dir):
+                if target_clean in item.lower():
+                    full_path = os.path.join(base_dir, item)
+                    os.startfile(full_path)
+                    return f"Found and opened: {full_path}"
+
+        return f"Could not locate folder or file matching '{target}' in standard directories."
+    except Exception as e:
+        return f"Failed to open system path: {e}"
+
+@tool
+def launch_app_or_setting(app_or_setting: str) -> str:
+    """
+    Launches system apps, browser, or Windows settings.
+    Supports app names (vscode, notepad, chrome, whatsapp, calculator, cmd, powershell)
+    or Windows Settings pages (e.g., 'display', 'bluetooth', 'network', 'sound', 'apps').
+    """
+    target = app_or_setting.lower().strip()
+    
+    # Windows Settings URIs map
+    settings_map = {
+        "settings": "ms-settings:",
+        "bluetooth": "ms-settings:bluetooth",
+        "display": "ms-settings:display",
+        "network": "ms-settings:network",
+        "sound": "ms-settings:sound",
+        "apps": "ms-settings:appsfeatures",
+        "update": "ms-settings:windowsupdate"
+    }
+
+    # Standard Applications map
+    app_map = {
+        "notepad": "notepad.exe",
+        "calculator": "calc.exe",
+        "cmd": "cmd.exe",
+        "powershell": "powershell.exe",
+        "explorer": "explorer.exe",
+        "vscode": "code",
+        "chrome": "chrome",
+        "brave": "brave",
+        "whatsapp": "start whatsapp:"
+    }
+
+    try:
+        if target in settings_map:
+            os.system(f"start {settings_map[target]}")
+            return f"Opened Windows {target} settings."
+        elif target in app_map:
+            subprocess.Popen(app_map[target], shell=True)
+            return f"Opened application: {target}"
+        else:
+            # Fallback: Try launching directly via system command
+            subprocess.Popen(target, shell=True)
+            return f"Attempted to launch command/app: {target}"
+    except Exception as e:
+        return f"Failed to launch '{app_or_setting}': {e}"
+
+@tool
+def read_local_file(file_path: str) -> str:
+    """Reads the contents of a local text or PDF file."""
+    if not os.path.exists(file_path):
+        return f"File not found at: {file_path}"
+    
+    try:
+        if file_path.lower().endswith('.txt'):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return f.read(3000)
+        elif file_path.lower().endswith('.pdf'):
+            import pypdf
+            text = ""
+            with open(file_path, 'rb') as f:
+                reader = pypdf.PdfReader(f)
+                for page in reader.pages[:5]:
+                    text += page.extract_text() or ""
+            return text[:3000] if text else "PDF is empty or unreadable text."
+        return "Unsupported file extension. Only .txt and .pdf are supported."
+    except Exception as e:
+        return f"Error reading file: {e}"
+
+@tool
 def play_music_on_youtube(song_name: str) -> str:
-    """Searches YouTube for a song and automatically plays the first result."""
+    """Searches YouTube for a song and automatically opens and plays the first result."""
     try:
         query = urllib.parse.quote(song_name)
         url = f"https://www.youtube.com/results?search_query={query}"
@@ -22,68 +136,27 @@ def play_music_on_youtube(song_name: str) -> str:
         if video_ids:
             webbrowser.open(f"https://www.youtube.com/watch?v={video_ids[0]}")
             return f"Playing {song_name} on YouTube."
-        return "Could not find the song."
+        return "Song not found on YouTube."
     except Exception as e:
-        return f"Error: {e}"
-
-@tool
-def open_application(app_name: str) -> str:
-    """Opens standard system applications (vscode, settings, notepad, chrome)."""
-    app_map = {
-        "notepad": "notepad.exe",
-        "vscode": "code",
-        "settings": "start ms-settings:",
-        "chrome": "chrome"
-    }
-    app_cmd = app_map.get(app_name.lower())
-    if app_cmd:
-        try:
-            subprocess.Popen(app_cmd, shell=True) 
-            return f"Opened {app_name}."
-        except Exception as e:
-            return f"Failed to open {app_name}: {e}"
-    return f"Application '{app_name}' is not recognized."
-
-@tool
-def read_local_file(file_path: str) -> str:
-    """Reads the text contents of a local .txt or .pdf file."""
-    if not os.path.exists(file_path):
-        return f"File not found at {file_path}"
-    
-    try:
-        if file_path.lower().endswith('.txt'):
-            with open(file_path, 'r', encoding='utf-8') as f:
-                return f.read(2000) # Limit to 2000 characters to prevent overwhelming the LLM
-        elif file_path.lower().endswith('.pdf'):
-            import pypdf
-            text = ""
-            with open(file_path, 'rb') as f:
-                reader = pypdf.PdfReader(f)
-                for page in reader.pages[:3]: # Read up to 3 pages
-                    text += page.extract_text()
-            return text[:2000]
-        return "Unsupported file type. Only .txt and .pdf are supported."
-    except Exception as e:
-        return f"Error reading file: {e}"
+        return f"Error playing music: {e}"
 
 @tool
 def change_volume(action: str, amount: int = 5) -> str:
-    """Changes system volume. Action must be 'up', 'down', or 'mute'. Amount is keystrokes (default 5)."""
+    """Changes system volume. Action must be 'up', 'down', or 'mute'."""
     try:
         if action == "mute":
             pyautogui.press("volumemute")
             return "Volume muted."
-        
         key = "volumeup" if action == "up" else "volumedown"
         for _ in range(amount):
             pyautogui.press(key)
-        return f"Turned volume {action}."
+        return f"Adjusted volume {action}."
     except Exception as e:
-        return f"Failed to change volume: {e}"
+        return f"Failed to adjust volume: {e}"
 
 @tool
 def analyze_screen(prompt: str = "Describe what you see on this screen in detail.") -> str:
-    """Takes a screenshot of the user's screen and analyzes it. Use when asked 'what am i seeing'."""
+    """Takes a screenshot of the user's screen and analyzes it."""
     try:
         screenshot = pyautogui.screenshot()
         buffered = BytesIO()
@@ -99,6 +172,14 @@ def analyze_screen(prompt: str = "Describe what you see on this screen in detail
         )
         return vision_llm.invoke([msg]).content
     except Exception as e:
-        return f"Failed to analyze the screen: {e}"
+        return f"Failed to analyze screen: {e}"
 
-jarvis_tools = [play_music_on_youtube, open_application, read_local_file, change_volume, analyze_screen]
+# Export system tools
+jarvis_tools = [
+    open_system_path_or_folder,
+    launch_app_or_setting,
+    read_local_file,
+    play_music_on_youtube,
+    change_volume,
+    analyze_screen
+]

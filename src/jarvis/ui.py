@@ -14,7 +14,22 @@ db.init_db()
 
 st.set_page_config(page_title="Jarvis OS", page_icon="🤖", layout="wide")
 
-# Initialize Session State
+def extract_text_content(content) -> str:
+    """Helper to convert structured LLM responses (lists/dicts) into plain strings."""
+    if isinstance(content, str):
+        return content
+    elif isinstance(content, list):
+        text_parts = []
+        for item in content:
+            if isinstance(item, str):
+                text_parts.append(item)
+            elif isinstance(item, dict) and "text" in item:
+                text_parts.append(item["text"])
+            elif hasattr(item, "text"):
+                text_parts.append(item.text)
+        return " ".join(text_parts)
+    return str(content)
+
 if "user_id" not in st.session_state:
     st.session_state.user_id = None
 if "current_thread_id" not in st.session_state:
@@ -22,14 +37,10 @@ if "current_thread_id" not in st.session_state:
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# ---------------------------------------------------------
-# AUTHENTICATION SCREEN (PURE EMAIL LOGIN/SIGNUP)
-# ---------------------------------------------------------
 def render_auth_page():
     st.title("🔒 Access Jarvis OS")
     tab1, tab2 = st.tabs(["Login", "Sign Up"])
     
-    # LOGIN TAB
     with tab1:
         l_email = st.text_input("Email", key="l_email")
         l_pass = st.text_input("Password", type="password", key="l_pass")
@@ -42,12 +53,10 @@ def render_auth_page():
             else:
                 st.error("Invalid email or password.")
 
-    # SIGN UP TAB
     with tab2:
         s_email = st.text_input("Email", key="s_email")
         s_pass = st.text_input("Password", type="password", key="s_pass")
         
-        # Captcha Generation
         if "captcha_ans" not in st.session_state:
             q, a = auth.generate_captcha()
             st.session_state.captcha_q = q
@@ -59,21 +68,19 @@ def render_auth_page():
         with col1:
             if st.button("Send OTP", use_container_width=True):
                 if not auth.is_valid_email(s_email):
-                    st.error("Please use a trusted email provider (Gmail, Yahoo, Outlook, etc.).")
+                    st.error("Please use a trusted email provider (Gmail, Yahoo, etc.).")
                 elif captcha_input != st.session_state.captcha_ans:
-                    st.error("Incorrect captcha answer. Try again.")
+                    st.error("Incorrect captcha answer.")
                 else:
                     otp = str(random.randint(100000, 999999))
                     st.session_state.pending_otp = otp
-                    
                     success, msg = auth.send_verification_email(s_email, otp)
                     if success:
                         st.session_state.otp_msg = msg
-                        st.toast("OTP processed!", icon="📩")
+                        st.toast("OTP Sent!", icon="📩")
                     else:
                         st.error(msg)
 
-        # Show OTP Status / Dev mode notification
         if "otp_msg" in st.session_state:
             st.info(st.session_state.otp_msg)
                 
@@ -82,15 +89,12 @@ def render_auth_page():
             if otp_input and otp_input == st.session_state.get("pending_otp"):
                 uid = db.create_user(s_email, s_pass)
                 if uid:
-                    st.success("Account created successfully! You can now log in.")
+                    st.success("Account created! Please log in.")
                 else:
-                    st.error("Account already exists with this email.")
+                    st.error("Account already exists.")
             else:
-                st.error("Invalid OTP code. Please check and try again.")
+                st.error("Invalid OTP code.")
 
-# ---------------------------------------------------------
-# MAIN APPLICATION INTERFACE
-# ---------------------------------------------------------
 def render_main_app():
     if "whisper" not in st.session_state:
         st.session_state.whisper = WhisperModel("base", device="cpu", compute_type="int8")
@@ -148,7 +152,7 @@ def render_main_app():
         text_input = user_submission["text"]
         files = user_submission["files"]
         audio = user_submission["audio"]
-        final_prompt = text_input
+        final_prompt = text_input or ""
 
         if audio:
             with open("temp_mic.wav", "wb") as f:
@@ -163,7 +167,7 @@ def render_main_app():
                 file_path = os.path.join("downloads", uploaded_file.name)
                 with open(file_path, "wb") as f:
                     f.write(uploaded_file.getvalue())
-                final_prompt += f"\n[System: Uploaded file saved at {file_path}. Use read_local_file tool if needed.]"
+                final_prompt += f"\n[System: File uploaded to {file_path}. Use read_local_file tool if needed.]"
 
         if len(st.session_state.chat_history) == 0 and final_prompt:
             short_title = final_prompt[:25] + "..." if len(final_prompt) > 25 else final_prompt
@@ -181,9 +185,13 @@ def render_main_app():
                     config=config
                 )
                 
-                response_text = result["messages"][-1].content
+                # Cleanly extract string response from the output object
+                raw_response = result["messages"][-1].content
+                response_text = extract_text_content(raw_response)
+                
                 st.markdown(response_text)
                 
+                # Safely generate audio using pure string text
                 audio_bytes = st.session_state.tts.generate_audio(response_text)
                 st.audio(audio_bytes, format="audio/mp3", autoplay=True)
 
@@ -191,7 +199,6 @@ def render_main_app():
             "role": "assistant", "content": response_text, "audio": audio_bytes
         })
 
-# Router
 if st.session_state.user_id is None:
     render_auth_page()
 else:
