@@ -3,6 +3,8 @@ myvenv
 myvenv313
 checkpoints*
 image_and_video
+jarvis_data*
+jarvis_data.sqlite
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
