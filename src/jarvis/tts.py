@@ -1,34 +1,25 @@
 import asyncio
 import edge_tts
-import pygame
 import tempfile
 import os
 
 class TextToSpeech:
-    def __init__(self, voice="en-US-ChristopherNeural"): # Professional, deep male voice
+    def __init__(self, voice="en-US-ChristopherNeural"):
         self.voice = voice
-        pygame.mixer.init()
 
-    def speak(self, text: str):
-        # Bridge the async TTS generation into our synchronous Jarvis loop
-        asyncio.run(self._async_speak(text))
+    def generate_audio(self, text: str) -> bytes:
+        """Generates TTS and returns it as audio bytes for the browser."""
+        return asyncio.run(self._async_generate(text))
 
-    async def _async_speak(self, text: str):
+    async def _async_generate(self, text: str) -> bytes:
         communicate = edge_tts.Communicate(text, self.voice)
-        
-        # Save audio to a temporary mp3 file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
             tmp_path = tmp_file.name
         
         await communicate.save(tmp_path)
         
-        # Play the audio using pygame
-        pygame.mixer.music.load(tmp_path)
-        pygame.mixer.music.play()
-        
-        # Wait for the audio to finish playing before allowing Jarvis to listen again
-        while pygame.mixer.music.get_busy():
-            pygame.time.Clock().tick(10)
+        with open(tmp_path, "rb") as f:
+            audio_bytes = f.read()
             
-        pygame.mixer.music.unload()
         os.remove(tmp_path)
+        return audio_bytes
