@@ -5,6 +5,7 @@ import re
 from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
+from duckduckgo_search import DDGS
 
 # Check if running locally based on our .env file
 IS_LOCAL = os.environ.get("ENVIRONMENT") == "local"
@@ -52,9 +53,28 @@ def play_music_on_youtube(song_name: str) -> str:
         return "Song not found on YouTube."
     except Exception as e:
         return f"Error playing music: {e}"
+    
+@tool
+def web_search(query: str) -> str:
+    """
+    Searches the internet for real-time information, latest news, or product comparisons.
+    Use this when you need up-to-date facts that fall outside your training data.
+    """
+    try:
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=3))
+            if not results:
+                return "No results found on the web."
+            
+            formatted_results = "\n\n".join(
+                [f"Title: {res['title']}\nSnippet: {res['body']}\nLink: {res['href']}" for res in results]
+            )
+            return formatted_results
+    except Exception as e:
+        return f"Web search failed: {e}"
 
 # Start the tool list with universal tools
-jarvis_tools = [read_local_file, play_music_on_youtube]
+jarvis_tools = [read_local_file, play_music_on_youtube, web_search]
 
 # ---------------------------------------------------------
 # LOCAL-ONLY TOOLS (Skipped in Cloud)
