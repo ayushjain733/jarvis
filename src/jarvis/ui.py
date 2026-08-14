@@ -41,8 +41,9 @@ if "guest_queries" not in st.session_state:
 # ---------------------------------------------------------
 def render_auth_page():
     st.title("🔒 Access Jarvis OS")
-    tab1, tab2 = st.tabs(["Login", "Sign Up"])
+    tab1, tab2, tab3 = st.tabs(["Login", "Sign Up", "Forgot Password"])
     
+    # ------------------ LOGIN TAB ------------------
     with tab1:
         l_email = st.text_input("Email", key="l_email")
         l_pass = st.text_input("Password", type="password", key="l_pass")
@@ -55,6 +56,7 @@ def render_auth_page():
             else:
                 st.error("Invalid email or password.")
 
+    # ------------------ SIGN UP TAB ------------------
     with tab2:
         s_email = st.text_input("Email", key="s_email")
         s_pass = st.text_input("Password", type="password", key="s_pass")
@@ -99,6 +101,51 @@ def render_auth_page():
             else:
                 st.error("Invalid OTP code.")
 
+    # ------------------ FORGOT PASSWORD TAB ------------------
+    with tab3:
+        fp_email = st.text_input("Registered Email", key="fp_email")
+        
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("Send Reset OTP", use_container_width=True):
+                if not auth.is_valid_email(fp_email):
+                    st.error("Please enter a valid email format.")
+                elif not db.check_user_exists(fp_email):
+                    st.error("No account found registered with this email.")
+                else:
+                    otp = str(random.randint(100000, 999999))
+                    st.session_state.fp_pending_otp = otp
+                    st.session_state.fp_target_email = fp_email
+                    success, msg = auth.send_verification_email(fp_email, otp)
+                    if success:
+                        st.session_state.fp_otp_msg = "OTP sent for password reset!"
+                        st.toast("Reset OTP Sent!", icon="📩")
+                    else:
+                        st.error(msg)
+
+        if "fp_otp_msg" in st.session_state:
+            st.info(st.session_state.fp_otp_msg)
+            
+        fp_otp_input = st.text_input("Enter 6-digit Reset OTP", key="fp_otp_input")
+        fp_new_pass = st.text_input("Enter New Password", type="password", key="fp_new_pass")
+        
+        if st.button("Reset Password", use_container_width=True):
+            if fp_otp_input and fp_otp_input == st.session_state.get("fp_pending_otp"):
+                if fp_email == st.session_state.get("fp_target_email"):
+                    if len(fp_new_pass) < 6:
+                        st.error("New password must be at least 6 characters long.")
+                    else:
+                        db.update_password(fp_email, fp_new_pass)
+                        st.success("Password reset successfully! You can now log in.")
+                        # Clean up session states to prevent reuse
+                        st.session_state.pop("fp_pending_otp", None)
+                        st.session_state.pop("fp_otp_msg", None)
+                else:
+                    st.error("Email mismatch. Please request the OTP again.")
+            else:
+                st.error("Invalid Reset OTP code.")
+
+    # ------------------ GUEST MODE ------------------
     st.divider()
     st.subheader("Just looking around?")
     if st.button("Try Jarvis as Guest (1 Query Only)", use_container_width=True):

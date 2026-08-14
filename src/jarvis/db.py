@@ -74,3 +74,21 @@ def delete_thread(thread_id):
     c.execute("DELETE FROM threads WHERE id=?", (thread_id,))
     conn.commit()
     conn.close()
+    
+def check_user_exists(email: str) -> bool:
+    """Checks if an email is registered in the database."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT id FROM users WHERE email=?", (email,))
+    user = c.fetchone()
+    conn.close()
+    return user is not None
+
+def update_password(email: str, new_password: str):
+    """Hashes the new password and updates the user's record."""
+    hashed = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE users SET password=? WHERE email=?", (hashed, email))
+    conn.commit()
+    conn.close()
